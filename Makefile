@@ -38,6 +38,10 @@ debugHomework:
 runRenderer:
 	./homework1 cristof_100 10000 4
 
+
+runRenderer1:
+	./homework1 cristof_8000 8000 4
+
 debugRenderer:
 	gdb -tui --args ./homework1 cristof_100 100 4
 

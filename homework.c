@@ -108,11 +108,10 @@ void writeData(const char * fileName, image *img) {
 
 void resize(image *in, image * out) { 
 
-	int resize_factor = in->resizeFactor;
 	int type = in->type;
 
 	//local variable which holds the resized image
-	image * local = (image *)malloc(sizeof (image));
+	//image * local = (image *)malloc(sizeof (image));
 
 	if(resize_factor % 2 == 0){
 
@@ -124,13 +123,13 @@ void resize(image *in, image * out) {
 			int average = 0;
 
 			
-			local->type = in->type;
-			local->width = in->width/resize_factor;
-			local->height = in->height/resize_factor;
-			local->colorMax = in->colorMax;
-			local->resizeFactor = in->resizeFactor;
+			out->type = in->type;
+			out->width = in->width/resize_factor;
+			out->height = in->height/resize_factor;
+			out->colorMax = in->colorMax;
+			out->resizeFactor = in->resizeFactor;
 
-			local->grayPixels = (gray *)malloc(local->width * local->height * sizeof(gray));
+			out->grayPixels = (gray *)malloc(out->width * out->height * sizeof(gray));
 
 			/*
 			 * The private variables that need to be private are the variables that iterate
@@ -138,19 +137,12 @@ void resize(image *in, image * out) {
 			 * the line and columns of the matrix of size resize_factor * resizefactor 
 			 * (lineOffset , colOffset).
 			 */
-			#pragma omp parallel for private(i,j,lineOffset,colOffset,average,localPosition,summ)
+			#pragma omp parallel for collapse(2)\
+					 private(i,j,lineOffset,colOffset,average,localPosition,summ)
 			for (j = 0 ; j < in->height ; j+= resize_factor){
 				for(i = 0 ; i < in->width ; i+= resize_factor){
 
-					/*
-					 * This is for not creating another thread which will access memory location 
-					 * greater than in->width or in->height or in->width * in->height
-					 */
-					if(j + resize_factor > in->height){
-						break;
-					}
-
-
+					
 					summ = 0 ;
 
 					/*
@@ -158,6 +150,15 @@ void resize(image *in, image * out) {
 					 * resize_factor * resize_factor
 					 */
 					for(lineOffset = 0 ; lineOffset < resize_factor ; lineOffset ++){
+
+						/*
+						 * This is for not creating another thread which will access memory location 
+						 * greater than in->width or in->height or in->width * in->height
+						 */
+						if(j + resize_factor > in->height){
+							break;
+						}
+
 						for(colOffset = 0 ; colOffset < resize_factor ; colOffset ++){
 
 							if(i + colOffset >= in->width || j + lineOffset >= in->height )
@@ -172,14 +173,13 @@ void resize(image *in, image * out) {
 					/*
 					 * The position in the output image that receives the average pixel values
 					 */
-					localPosition = (i/resize_factor) + (local->width * (j/resize_factor));
-					local->grayPixels[localPosition].gr = average;
+					localPosition = (i/resize_factor) + (out->width * (j/resize_factor));
+					out->grayPixels[localPosition].gr = average;
 
 				}
 			}
 
-			*out = *local;
-			free(local);
+			free(in -> grayPixels);
 		}
 
 		else if (type == 6){
@@ -193,15 +193,15 @@ void resize(image *in, image * out) {
 			int averageGreen = 0;
 			int averageBlue = 0;
 
-			local->type = in->type;
-			local->width = in->width/resize_factor;
-			local->height = in->height/resize_factor;
-			local->colorMax = in->colorMax;
-			local->resizeFactor = in->resizeFactor;
+			out->type = in->type;
+			out->width = in->width/resize_factor;
+			out->height = in->height/resize_factor;
+			out->colorMax = in->colorMax;
+			out->resizeFactor = in->resizeFactor;
 
-			local->colorPixels = (color *)malloc( sizeof(color) * ((in->width * in->height) / (resize_factor * resize_factor)));
+			out->colorPixels = (color *)malloc( sizeof(color) * ((in->width * in->height) / (resize_factor * resize_factor)));
 
-			#pragma omp parallel for private(i,j,lineOffset,colOffset\
+			#pragma omp parallel for collapse(2) private(i,j,lineOffset,colOffset\
 							,localPosition)\
 							firstprivate(\
 							summRed,summGreen,summBlue\
@@ -213,19 +213,21 @@ void resize(image *in, image * out) {
 					summGreen = 0 ;
 					summBlue = 0 ;
 
-					/*
-					 * This is for not creating another thread which will access memory location 
-					 * greater than in->width or in->height or in->width * in->height
-					 */
-					if(j + resize_factor > in->height){
-						break;
-					}
 
 					/*
 					 * Iterating through each element of the matrix defined by
 					 * resize_factor * resize_factor
 					 */
 					for(lineOffset = 0 ; lineOffset < resize_factor ; lineOffset ++ ){
+
+						/*
+						 * This is for not creating another thread which will access memory location 
+						 * greater than in->width or in->height or in->width * in->height
+						 */
+						if(j + resize_factor > in->height){
+							break;
+						}
+
 						for(colOffset = 0 ; colOffset < resize_factor ; colOffset ++){
 
 							if(i + colOffset >= in->width || j + lineOffset >= in->height)
@@ -245,19 +247,17 @@ void resize(image *in, image * out) {
 					/*
 					 * The position in the output image that receives the average pixel values
 					 */
-					localPosition = (i/resize_factor) + (local->width * (j/resize_factor));
+					localPosition = (i/resize_factor) + (out->width * (j/resize_factor));
 
-					local->colorPixels[localPosition].r = averageRed;
-					local->colorPixels[localPosition].g = averageGreen;
-					local->colorPixels[localPosition].b = averageBlue;
+					out->colorPixels[localPosition].r = averageRed;
+					out->colorPixels[localPosition].g = averageGreen;
+					out->colorPixels[localPosition].b = averageBlue;
 
 
 				}
 			}
 
-			*out = *local;
-			free(local);
-
+		free(in -> colorPixels);
 		}
 
 	}
@@ -267,29 +267,25 @@ void resize(image *in, image * out) {
 
 		if(type == 5){
 
-			int i,j,lineOffset,colOffset,localPosition = 0;
+			int i = 0, j = 0;
+			int lineOffset = 0;
+			int colOffset = 0;
+			int localPosition = 0;
 			int summ = 0; 
 			int average = 0;
 
-			local->type = in->type;
-			local->width = in->width/resize_factor;
-			local->height = in->height/resize_factor;
-			local->colorMax = in->colorMax;
-			local->resizeFactor = in->resizeFactor;
+			out->type = in->type;
+			out->width = in->width/resize_factor;
+			out->height = in->height/resize_factor;
+			out->colorMax = in->colorMax;
+			out->resizeFactor = in->resizeFactor;
 
-			local->grayPixels = (gray *)malloc(local->width * local->height * sizeof(gray));
+			out->grayPixels = (gray *)malloc(out->width * out->height * sizeof(gray));
 
-			#pragma omp parallel for private(i,j,lineOffset,colOffset,average,localPosition,summ)
+			#pragma omp parallel for collapse(2)\
+					private(i,j,lineOffset,colOffset,localPosition,summ,average)
 			for (j = 0 ; j < in->height ; j+= resize_factor){
 				for(i = 0 ; i < in->width ; i+= resize_factor){
-
-					/*
-					 * This is for not creating another thread which will access memory location 
-					 * greater than in->width or in->height or in->width * in->height
-					 */
-					if(j + resize_factor > in->height){
-						break;
-					}
 
 					summ = 0 ;
 
@@ -299,6 +295,14 @@ void resize(image *in, image * out) {
 					 */
 					for(lineOffset = 0 ; lineOffset < resize_factor ; lineOffset ++){
 						for(colOffset = 0 ; colOffset < resize_factor ; colOffset ++){
+
+							/*
+							 * This is for not creating another thread which will access memory location 
+							 * greater than in->width or in->height or in->width * in->height
+							 */
+							if(j + resize_factor >= in->height){
+								break;
+							}
 
 							if(i + colOffset >= in->width || j + lineOffset >= in->height )
 								continue;
@@ -313,20 +317,16 @@ void resize(image *in, image * out) {
 					/*
 					 * The position in the output image that receives the average pixel values
 					 */
-					localPosition = (i/resize_factor) + (local->width * (j/resize_factor));
-					local->grayPixels[localPosition].gr = average;
-
-				}
+					localPosition = (i/resize_factor) + (out->width * (j/resize_factor));
+					out->grayPixels[localPosition].gr = average;
+					}
 			}
-
-			*out = *local;
-			free(local);
-
+			free(in -> grayPixels);
 		}
 
-		else if(type == 6){
+		if(type == 6){
 
-			int i =0,j =0 ,lineOffset = 0,colOffset = 0 ,localPosition = 0;
+			int i,j,lineOffset,colOffset,localPosition = 0;
 			int summRed = 0; 
 			int summGreen = 0;
 			int summBlue = 0;
@@ -334,34 +334,28 @@ void resize(image *in, image * out) {
 			int averageGreen = 0;
 			int averageBlue = 0;
 
-			local->type = in->type;
-			local->width = in->width/resize_factor;
-			local->height = in->height/resize_factor;
-			local->colorMax = in->colorMax;
-			local->resizeFactor = in->resizeFactor;
+			out->type = in->type;
+			out->width = in->width/resize_factor;
+			out->height = in->height/resize_factor;
+			out->colorMax = in->colorMax;
+			out->resizeFactor = in->resizeFactor;
 
-			local->colorPixels = (color *)malloc(local->width * local->height * sizeof(color));
+			out->colorPixels = (color *)malloc( sizeof(color) * ((in->width * in->height) / (resize_factor * resize_factor)));
 
-			#pragma omp parallel for private(i,j,lineOffset,colOffset,localPosition,summRed,summGreen,summBlue,averageRed,averageGreen,averageBlue)
+
+			#pragma omp parallel for collapse(2) private(i,j,lineOffset,colOffset\
+							,localPosition)\
+							firstprivate(\
+							summRed,summGreen,summBlue\
+							,averageRed,averageGreen,averageBlue)
 			for (j = 0 ; j < in->height ; j+= resize_factor){
 				for(i = 0 ; i < in->width ; i+= resize_factor){
-
-					/*
-					 * This is for not creating another thread which will access memory location 
-					 * greater than in->width or in->height or in->width * in->height
-					 */
-					if(j + resize_factor > in->height){
-						break;
-					}
 
 					summRed = 0 ;
 					summGreen = 0;
 					summBlue = 0;
 
-					/*
-					 * Iterating through each element of the matrix defined by
-					 * resize_factor * resize_factor
-					 */
+
 					for(lineOffset = 0 ; lineOffset < resize_factor ; lineOffset ++){
 						for(colOffset = 0 ; colOffset < resize_factor ; colOffset ++){
 
@@ -378,26 +372,22 @@ void resize(image *in, image * out) {
 						}
 					}
 
-					/*
-					 * The position in the output image that receives the average pixel values
-					 */
-					localPosition = (i/resize_factor) + (local->width * (j/resize_factor));
+					localPosition = (i/resize_factor) + (out->width * (j/resize_factor));
 
 					averageRed = summRed/GAUSSIAN_KERNEL_ELEMENT_SUMM;
 					averageGreen = summGreen/GAUSSIAN_KERNEL_ELEMENT_SUMM;
 					averageBlue = summBlue/GAUSSIAN_KERNEL_ELEMENT_SUMM;
 
-					local->colorPixels[localPosition].r = averageRed;
-					local->colorPixels[localPosition].g = averageGreen;
-					local->colorPixels[localPosition].b = averageBlue;
+					out->colorPixels[localPosition].r = averageRed;
+					out->colorPixels[localPosition].g = averageGreen;
+					out->colorPixels[localPosition].b = averageBlue;
 
 				}
 			}
-
-			*out = *local;
-			free(local);
+			free(in -> colorPixels);
 
 		}
+
 
 	}
 }
